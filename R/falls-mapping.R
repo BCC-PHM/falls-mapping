@@ -33,16 +33,24 @@ ward_falls <- convert_GP_data(
   value_header = "number_of_falls",
   norm_header = "Patients65Plus",
   norm_output_per = 1000
-)
+) %>%
+  mutate(
+    `Falls per 1000 patients aged 65+` = `number_of_falls per 1000 Patients65Plus`
+  )
 
+palette <- ggpubr::get_palette((c("#FFFFFF", "#105ca5")), 20)
 # Plot BSol map
 map <- plot_map(
   ward_falls,
-  value_header = "number_of_falls per 1000 Patients65Plus",
+  value_header = "Falls per 1000 patients aged 65+",
   map_type = "Ward",
-  map_title = "Emergency hospital admissions for falls injuries in persons aged 65 and over per 1000 patients registered to a BSol GP (2022/23)"
+  area_name = "Birmingham",
+  map_title = "Emergency hospital admissions for falls injuries in persons aged 65 and over per 1000 patients registered to a BSol GP (2022/23)",
+  style = "cont",
+  breaks = c(0, 10, 20, 30),
+  palette = palette
 )
 map
 
-save_map(map, save_name = "../output/BSol-falls-22-23.svg",
-         width = 6, height = 6)
+save_map(map, save_name = "../output/BSol-falls-22-23.html",
+         width = 4.5, height = 6)
