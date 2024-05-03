@@ -5,37 +5,40 @@ library("BSol.mapR")
 # Load A&E data from ICB warehouse
 ane_data <- readxl::read_excel(
   "../data/falls-ane-data.xlsx"
+  ) %>%
+  left_join(
+    read.csv(
+      "../data/West Midlands postcodes.csv",
+      check.names=FALSE
+    ) %>% 
+      mutate() %>%
+      group_by(`LSOA Code`) %>% 
+      summarize (
+        `Ward Code` = names(which.max(table(`Ward Code`)))
+      ) 
+  ) %>%
+  group_by(`Ward Code`) %>%
+  summarise(
+    number_of_falls = sum(number_of_falls)
   )
 
-# Load GP patient data and calculate patients 65+ for each practice
-path <- "//SVWCCG111/PublicHealth$/2.0 KNOWLEDGE EVIDENCE & GOVERNANCE - KEG/2.12 PHM AND RESEARCH/Data/Primary Care/"
-gp_65plus_counts <- readxl::read_excel(
-  paste( path, "BSOL GP Population List - Sept 2023.xlsx", sep =""),
-  sheet = "Dataset"
+# Load Birmingham Census data
+ward_65plus_counts <- readxl::read_excel(
+  "../data/Birmingham_65plus_census.xlsx"
   ) %>%
   filter(
-    ProxyAgeAtEOM >= 65
+    `Age (3 categories)` >= "Aged 65 years and over"
   ) %>%
-  group_by(GP_Code) %>%
-  summarize(
-    Patients65Plus = sum(Count)
+  select(
+    `Ward Code`, Ward, Observation
   )
   
-GP_falls <- gp_65plus_counts %>%
+ward_falls <- ward_65plus_counts %>%
   left_join(ane_data,
-             by = c("GP_Code" = "GMPOrganisationCode")) %>%
-  replace(is.na(.), 0) 
-
-# Convert GP data to ward-level
-ward_falls <- convert_GP_data(
-  data = GP_falls,
-  GP_code_header = "GP_Code",
-  value_header = "number_of_falls",
-  norm_header = "Patients65Plus",
-  norm_output_per = 1000
-) %>%
+             by = join_by("Ward Code")) %>%
+  replace(is.na(.), -1) %>%
   mutate(
-    `Falls per 1000 patients aged 65+` = `number_of_falls per 1000 Patients65Plus`,
+    `Falls per 1000 patients aged 65+` = `number_of_falls`/Observation*1000,
     `Number of falls` = number_of_falls
   )
 
@@ -46,16 +49,16 @@ map <- plot_map(
   value_header = "Falls per 1000 patients aged 65+",
   map_type = "Ward",
   area_name = "Birmingham",
-  map_title = "Emergency hospital admissions for falls injuries in persons aged 65 and over per 1000 patients registered to a BSol GP (2022/23)",
+  map_title = "Emergency hospital admissions for falls injuries in persons aged 65 and over per 1000 residents (2022/23)",
   style = "cont",
-  breaks = c(0, 10, 20, 30),
-  palette = palette
+  palette = palette,
+  breaks = c(0, 10, 20, 30, 40)
 )
 map
 
-save_map(map, save_name = "../output/BSol-falls-22-23.png",
+save_map(map, save_name = "../output/BSol-falls-22-23-v2.png",
          width = 4.5, height = 6)
-save_map(map, save_name = "../output/BSol-falls-22-23.html",
+save_map(map, save_name = "../output/BSol-falls-22-23-v2.html",
          width = 4.5, height = 6)
 
 
@@ -67,12 +70,12 @@ raw_falls_map <- plot_map(
   area_name = "Birmingham",
   map_title = "Emergency hospital admissions for falls injuries in persons aged 65 and over (2022/23)",
   style = "cont",
-  #breaks = c(0, 10, 20, 30),
-  palette = palette
+  palette = palette,
+  breaks = c(0, 50, 100, 150)
 )
 raw_falls_map
 
-save_map(raw_falls_map, save_name = "../output/BSol-falls-raw-22-23.png",
+save_map(raw_falls_map, save_name = "../output/BSol-falls-raw-22-23-v2.png",
          width = 4.5, height = 6)
-save_map(raw_falls_map, save_name = "../output/BSol-falls-raw-22-23.html",
+save_map(raw_falls_map, save_name = "../output/BSol-falls-raw-22-23-v2.html",
          width = 4.5, height = 6)
