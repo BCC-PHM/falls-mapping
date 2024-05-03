@@ -11,7 +11,8 @@ https://fingertips.phe.org.uk/search/falls#page/6/gid/1/pat/159/par/K02000001/at
 WITH injuries AS (
 SELECT DISTINCT
 	[NHSNumber],
-	[AdmissionDate]
+	[AdmissionDate],
+	[AgeOnAdmission]
   FROM 
 	[EAT_Reporting_BSOL].[SUS].[VwInpatientEpisodesDiagnosisRelational] AS A
   LEFT JOIN 
@@ -25,9 +26,7 @@ SELECT DISTINCT
 	-- First reason for admission
 	[DiagnosisOrder] = 1 AND
     -- In year 22/23
-	[AdmissionDate] >= '2022-04-01' AND [AdmissionDate] < '2023-04-01' AND
-	-- Only include those aged 65 +
-	AgeOnAdmission >= 65
+	[AdmissionDate] >= '2022-04-01' AND [AdmissionDate] < '2023-04-01' 
 ),
 
 falls AS (
@@ -51,7 +50,7 @@ SELECT DISTINCT
 	AgeOnAdmission >= 65
 ),
 
-injuries_from_falls AS (
+injuries_from_falls_65 AS (
 	-- get all admissions with "S00 to T98" in the primary diagnosis and
     -- "W00-W19" in any of the other diagnosis fields
 	SELECT 
@@ -63,6 +62,26 @@ injuries_from_falls AS (
 	ON
 		I.[NHSNumber] = F.[NHSNumber] AND
 		I.[AdmissionDate] = F.[AdmissionDate]
+	WHERE
+		-- Only include those aged 65 +
+		AgeOnAdmission >= 65
+),
+
+injuries_from_falls_80 AS (
+	-- get all admissions with "S00 to T98" in the primary diagnosis and
+    -- "W00-W19" in any of the other diagnosis fields
+	SELECT 
+		I.[NHSNumber]
+	FROM 
+		injuries AS I
+	INNER JOIN 
+		falls as F
+	ON
+		I.[NHSNumber] = F.[NHSNumber] AND
+		I.[AdmissionDate] = F.[AdmissionDate]
+	WHERE
+		-- Only include those aged 65 +
+		AgeOnAdmission >= 80
 ),
 
 latest_arrivals AS (
@@ -77,12 +96,12 @@ latest_arrivals AS (
 	GROUP BY [NHSNumber]
 ),
 
-patient_wards_all AS (
+patient_LSOAs_all AS (
 	-- Get latest ward for each NHS number
 	SELECT
 		DISTINCT
 		L.[NHSNumber],
-		W.[ElectoralWardDivision]
+		W.[LowerLayerSuperOutputArea]
 	FROM latest_arrivals AS L
 	LEFT JOIN
 		[EAT_Reporting_BSOL].[SUS].[VwAEPatientGeography] AS W
@@ -98,16 +117,16 @@ problem_IDs AS (
 	SELECT
 		[NHSNumber],
 		COUNT(*) AS N
-	FROM patient_wards_all
+	FROM patient_LSOAs_all
 	GROUP BY [NHSNumber]
 	HAVING COUNT(*) > 1
 ),
 
-patient_wards AS (
+patient_LSOAs AS (
 	-- Remove problem NHS IDs
 	SELECT
 		WA.*
-	FROM patient_wards_all as WA
+	FROM patient_LSOAs_all as WA
 	LEFT JOIN problem_IDs AS P
 	ON WA.[NHSNumber] = P.[NHSNumber]
 	WHERE P.[NHSNumber] IS NULL
@@ -115,13 +134,13 @@ patient_wards AS (
 
 
 SELECT 
-	GEO.[ElectoralWardDivision],
+	GEO.[LowerLayerSuperOutputArea],
 	COUNT(*) AS number_of_falls
 FROM 
-	injuries_from_falls AS IFF
-LEFT JOIN patient_wards AS GEO
+	injuries_from_falls_80 AS IFF
+LEFT JOIN patient_LSOAs AS GEO
 	ON IFF.[NHSNumber] = GEO.[NHSNumber]
-GROUP BY GEO.[ElectoralWardDivision]
+GROUP BY GEO.[LowerLayerSuperOutputArea]
 ORDER BY COUNT(*) DESC
 
 
