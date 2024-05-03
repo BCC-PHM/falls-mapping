@@ -10,7 +10,6 @@ https://fingertips.phe.org.uk/search/falls#page/6/gid/1/pat/159/par/K02000001/at
 
 WITH injuries AS (
 SELECT DISTINCT
-	[GMPOrganisationCode],
 	[NHSNumber],
 	[AdmissionDate]
   FROM 
@@ -50,18 +49,79 @@ SELECT DISTINCT
 	[AdmissionDate] >= '2022-04-01' AND [AdmissionDate] < '2023-04-01' AND
 	-- Only include those aged 65 +
 	AgeOnAdmission >= 65
+),
+
+injuries_from_falls AS (
+	-- get all admissions with "S00 to T98" in the primary diagnosis and
+    -- "W00-W19" in any of the other diagnosis fields
+	SELECT 
+		I.[NHSNumber]
+	FROM 
+		injuries AS I
+	INNER JOIN 
+		falls as F
+	ON
+		I.[NHSNumber] = F.[NHSNumber] AND
+		I.[AdmissionDate] = F.[AdmissionDate]
+),
+
+latest_arrivals AS (
+	-- Calculate the most recent admission for each NHS Number
+	SELECT
+		[NHSNumber],
+		MAX(ArrivalDateTime) AS LatestArrival
+	FROM 
+		[EAT_Reporting_BSOL].[SUS].[VwAEPatientGeography]
+	WHERE 
+		[ArrivalDateTime] >= '2022-04-01' AND [ArrivalDateTime] < '2023-04-01'
+	GROUP BY [NHSNumber]
+),
+
+patient_wards_all AS (
+	-- Get latest ward for each NHS number
+	SELECT
+		DISTINCT
+		L.[NHSNumber],
+		W.[ElectoralWardDivision]
+	FROM latest_arrivals AS L
+	LEFT JOIN
+		[EAT_Reporting_BSOL].[SUS].[VwAEPatientGeography] AS W
+	ON 
+		L.[NHSNumber] = W.[NHSNumber] AND 
+		L.[LatestArrival] = W.[ArrivalDateTime]
+	WHERE 
+		W.[ArrivalDateTime] >= '2022-04-01' AND W.[ArrivalDateTime] < '2023-04-01'
+),
+
+problem_IDs AS (
+	-- Get NHS numbers that still have multiple wards
+	SELECT
+		[NHSNumber],
+		COUNT(*) AS N
+	FROM patient_wards_all
+	GROUP BY [NHSNumber]
+	HAVING COUNT(*) > 1
+),
+
+patient_wards AS (
+	-- Remove problem NHS IDs
+	SELECT
+		WA.*
+	FROM patient_wards_all as WA
+	LEFT JOIN problem_IDs AS P
+	ON WA.[NHSNumber] = P.[NHSNumber]
+	WHERE P.[NHSNumber] IS NULL
 )
 
+
 SELECT 
-	[GMPOrganisationCode],
+	GEO.[ElectoralWardDivision],
 	COUNT(*) AS number_of_falls
 FROM 
-	injuries AS I
-INNER JOIN 
-	falls as F
-ON
-	I.[NHSNumber] = F.[NHSNumber] AND
-	I.[AdmissionDate] = F.[AdmissionDate]
-GROUP BY
-	[GMPOrganisationCode]
+	injuries_from_falls AS IFF
+LEFT JOIN patient_wards AS GEO
+	ON IFF.[NHSNumber] = GEO.[NHSNumber]
+GROUP BY GEO.[ElectoralWardDivision]
+ORDER BY COUNT(*) DESC
+
 
