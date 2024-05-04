@@ -45,12 +45,10 @@ SELECT DISTINCT
 	-- First reason for admission
 	[DiagnosisOrder] > 1 AND
     -- In year 22/23
-	[AdmissionDate] >= '2022-04-01' AND [AdmissionDate] < '2023-04-01' AND
-	-- Only include those aged 65 +
-	AgeOnAdmission >= 65
+	[AdmissionDate] >= '2022-04-01' AND [AdmissionDate] < '2023-04-01'
 ),
 
-injuries_from_falls_65 AS (
+injuries_from_falls_65to84 AS (
 	-- get all admissions with "S00 to T98" in the primary diagnosis and
     -- "W00-W19" in any of the other diagnosis fields
 	SELECT 
@@ -64,10 +62,10 @@ injuries_from_falls_65 AS (
 		I.[AdmissionDate] = F.[AdmissionDate]
 	WHERE
 		-- Only include those aged 65 +
-		AgeOnAdmission >= 65
+		AgeOnAdmission >= 65 AND AgeOnAdmission <85
 ),
 
-injuries_from_falls_80 AS (
+injuries_from_falls_85plus AS (
 	-- get all admissions with "S00 to T98" in the primary diagnosis and
     -- "W00-W19" in any of the other diagnosis fields
 	SELECT 
@@ -81,8 +79,41 @@ injuries_from_falls_80 AS (
 		I.[AdmissionDate] = F.[AdmissionDate]
 	WHERE
 		-- Only include those aged 65 +
-		AgeOnAdmission >= 80
+		AgeOnAdmission >= 85
 ),
+
+injuries_from_falls_below65 AS (
+	-- get all admissions with "S00 to T98" in the primary diagnosis and
+    -- "W00-W19" in any of the other diagnosis fields
+	SELECT 
+		I.[NHSNumber]
+	FROM 
+		injuries AS I
+	INNER JOIN 
+		falls as F
+	ON
+		I.[NHSNumber] = F.[NHSNumber] AND
+		I.[AdmissionDate] = F.[AdmissionDate]
+	WHERE
+		-- Only include those aged 65 +
+		AgeOnAdmission < 65
+),
+
+injuries_from_falls_all_ages AS (
+	-- get all admissions with "S00 to T98" in the primary diagnosis and
+    -- "W00-W19" in any of the other diagnosis fields
+	SELECT 
+		I.[NHSNumber],
+		I.[AgeOnAdmission]
+	FROM 
+		injuries AS I
+	INNER JOIN 
+		falls as F
+	ON
+		I.[NHSNumber] = F.[NHSNumber] AND
+		I.[AdmissionDate] = F.[AdmissionDate]
+),
+
 
 latest_arrivals AS (
 	-- Calculate the most recent admission for each NHS Number
@@ -132,15 +163,31 @@ patient_LSOAs AS (
 	WHERE P.[NHSNumber] IS NULL
 )
 
+--injuries_from_falls_below65
+--injuries_from_falls_65to84
+--injuries_from_falls_85plus
+
 
 SELECT 
 	GEO.[LowerLayerSuperOutputArea],
 	COUNT(*) AS number_of_falls
 FROM 
-	injuries_from_falls_80 AS IFF
+	injuries_from_falls_below65 AS IFF
 LEFT JOIN patient_LSOAs AS GEO
 	ON IFF.[NHSNumber] = GEO.[NHSNumber]
 GROUP BY GEO.[LowerLayerSuperOutputArea]
 ORDER BY COUNT(*) DESC
 
 
+
+/*
+-- Get age breakdown
+SELECT 
+	AgeOnAdmission, 
+	COUNT(*) AS N
+FROM injuries_from_falls_all_ages 
+GROUP BY
+	AgeOnAdmission
+ORDER BY 
+	AgeOnAdmission
+*/
