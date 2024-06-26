@@ -26,6 +26,9 @@ census_data <- readxl::read_excel(
     `Ward Code`, Ward, age_group, Observation
   )
 
+services <- readxl::read_excel("../data/service-data.xlsx", 
+                               sheet = "processed")
+
 for (age_i in age_groups) {
   # Load A&E data from ICB warehouse
   ane_data <- readxl::read_excel(
@@ -85,6 +88,17 @@ for (age_i in age_groups) {
     palette = palette
   )
   
+  map1 <- add_points(
+    map, services, 
+    color = "Service Type"
+  )
+  
+  map2 <- add_points(
+    map, services, 
+    color = "Service Type",
+    shape = "Provision"
+  )
+  
   save_name1 <- paste(
     "../output/", 
     str_replace_all(age_i, " ", "-"),
@@ -93,9 +107,9 @@ for (age_i in age_groups) {
     str_replace_all(age_i, " ", "-"),
     sep = ""
   )
-  save_map(map, save_name = paste(save_name1, ".png", sep = ""),
+  save_map(map1, save_name = paste(save_name1, ".png", sep = ""),
            width = 4.5, height = 6)
-  save_map(map, save_name = paste(save_name1, ".html", sep = ""),
+  save_map(map2, save_name = paste(save_name1, ".html", sep = ""),
            width = 4.5, height = 6)
   
   ## Raw falls (for age group) ##
