@@ -76,7 +76,7 @@ for (age_i in age_groups) {
     age_i,
     "per 1000 residents (2022/23)"
     )
-  
+
   # Plot Birmingham map
   map <- plot_map(
     ward_falls,
@@ -90,13 +90,15 @@ for (age_i in age_groups) {
   
   map1 <- add_points(
     map, services, 
-    color = "Service Type"
+    color = "Service Type",
+    size = 0.2
   )
   
   map2 <- add_points(
     map, services, 
     color = "Service Type",
-    shape = "Provision"
+    shape = "Provision",
+    size = 
   )
   
   save_name1 <- paste(
