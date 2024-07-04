@@ -74,7 +74,9 @@ for (age_i in age_groups) {
   title1 <- paste(
     "Emergency hospital admissions for falls injuries in persons",
     age_i,
-    "per 1000 residents (2022/23)"
+    "per 1000 residents aged",
+    age_i,
+    "(2022/23)"
     )
 
   # Plot Birmingham map
@@ -83,7 +85,7 @@ for (age_i in age_groups) {
     value_header = "Falls per 1000 patients",
     map_type = "Ward",
     area_name = "Birmingham",
-    map_title = title1,
+    map_title  = title1,
     style = "cont",
     palette = palette
   )
@@ -94,13 +96,7 @@ for (age_i in age_groups) {
     size = 0.2
   )
   
-  map2 <- add_points(
-    map, services, 
-    color = "Service Type",
-    shape = "Provision",
-    size = 
-  )
-  
+
   save_name1 <- paste(
     "../output/", 
     str_replace_all(age_i, " ", "-"),
@@ -111,52 +107,30 @@ for (age_i in age_groups) {
   )
   save_map(map1, save_name = paste(save_name1, ".png", sep = ""),
            width = 4.5, height = 6)
-  save_map(map2, save_name = paste(save_name1, ".html", sep = ""),
-           width = 4.5, height = 6)
+
   
-  ## Raw falls (for age group) ##
-  
-  title2 <- paste(
-    "Emergency hospital admissions for falls injuries in persons",
-    age_i,
-    "(2022/23)"
-  )
+  ## html version ##
   
   # Plot raw falls map
-  raw_falls_map <- plot_map(
+  map2 <- plot_map(
     ward_falls,
-    value_header = "Number of falls",
+    value_header = "Falls per 1000 patients",
     map_type = "Ward",
     area_name = "Birmingham",
-    map_title = title2,
+    fill_title  = stringr::str_replace_all(
+      stringr::str_wrap(title1, 40), "\n", "</br>"
+      ),
     style = "cont",
     palette = palette
   )
-  raw_falls_map
-  
-  save_name2 <- paste(
-    "../output/", 
-    str_replace_all(age_i, " ", "-"),
-    "/",
-    "Brum-falls-raw-22-23-age-", 
-    str_replace_all(age_i, " ", "-"),
-    sep = ""
+  map2 <- add_points(
+    map2, services, 
+    color = "Service Type",
+    shape = "Provision",
+    size = 0.2
   )
   
-  save_map(raw_falls_map, save_name = paste(save_name2, ".png", sep = ""),
+  save_map(map2, save_name = paste(save_name1, ".html", sep = ""),
            width = 4.5, height = 6)
-  save_map(raw_falls_map, save_name = paste(save_name2, ".html", sep = ""),
-           width = 4.5, height = 6)
-}
-
-
   
-
-
-#palette <- ggpubr::get_palette((c("#FFFFFF", "#105ca5")), 20)
-
-map
-
-
-
-
+}
