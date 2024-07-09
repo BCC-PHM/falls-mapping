@@ -65,7 +65,7 @@ for (age_i in age_groups) {
               by = join_by("Ward Code")) %>%
     replace(is.na(.), -1) %>%
     mutate(
-      `Falls per 1000 patients` = `number_of_falls`/Observation*1000,
+      `Falls per 1000 residents` = `number_of_falls`/Observation*1000,
       `Number of falls` = number_of_falls
     )
   
@@ -82,7 +82,7 @@ for (age_i in age_groups) {
   # Plot Birmingham map
   map <- plot_map(
     ward_falls,
-    value_header = "Falls per 1000 patients",
+    value_header = "Falls per 1000 residents",
     map_type = "Ward",
     area_name = "Birmingham",
     map_title  = title1,
@@ -114,7 +114,7 @@ for (age_i in age_groups) {
   # Plot raw falls map
   map2 <- plot_map(
     ward_falls,
-    value_header = "Falls per 1000 patients",
+    value_header = "Falls per 1000 residents",
     map_type = "Ward",
     area_name = "Birmingham",
     fill_title  = stringr::str_replace_all(
