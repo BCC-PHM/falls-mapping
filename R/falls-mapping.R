@@ -5,8 +5,9 @@ library("stringr")
 
 # Define labels for age groups of interest
 age_groups = c("under 65", "65 to 84", "85 and over")
+year = "22/23"
 
-palette <- ggpubr::get_palette((c("#FFFFFF", "#105ca5")), 20)
+palette <- ggpubr::get_palette(c("#FFFFFF", "#105ca5"), 20)
 
 # Load census data
 census_data <- readxl::read_excel(
@@ -32,7 +33,11 @@ services <- readxl::read_excel("../data/service-data.xlsx",
 for (age_i in age_groups) {
   # Load A&E data from ICB warehouse
   ane_data <- readxl::read_excel(
-    "../data/falls-ane-data.xlsx",
+    paste0(
+      "../data/falls-ane-data-", 
+      str_replace(year, "/", "-"),
+      ".xlsx" 
+    ),
     sheet = age_i
   ) %>%
     left_join(
@@ -71,12 +76,12 @@ for (age_i in age_groups) {
   
   ## Weighted falls ##
   
-  title1 <- paste(
-    "Emergency hospital admissions for falls injuries in persons",
+  title1 <- paste0(
+    "Emergency hospital admissions for falls injuries in persons ",
     age_i,
-    "per 1000 residents aged",
+    " per 1000 residents aged ",
     age_i,
-    "(2022/23)"
+    " (",year,")"
     )
 
   # Plot Birmingham map
@@ -99,9 +104,9 @@ for (age_i in age_groups) {
 
   save_name1 <- paste(
     "../output/", 
+    str_replace(year, "/", "-"), "/",
     str_replace_all(age_i, " ", "-"),
-    "/",
-    "Brum-falls-22-23-age-", 
+    "/Brum-falls-23-24-age-", 
     str_replace_all(age_i, " ", "-"),
     sep = ""
   )
