@@ -2,6 +2,7 @@
 library("dplyr")
 library("BSol.mapR")
 library("stringr")
+library("writexl")
 
 # Define labels for age groups of interest
 age_groups = c("under 65", "65 to 84", "85 and over")
@@ -12,7 +13,7 @@ palette <- ggpubr::get_palette(c("#FFFFFF", "#105ca5"), 20)
 # Load census data
 census_data <- readxl::read_excel(
   "../data/birmingham_ages_census.xlsx"
-  ) %>% 
+  ) %>%
   mutate(
     Ward = gsub(" \\(Birmingham\\)", "", x = `Electoral wards and divisions`),
     `Ward Code` = `Electoral wards and divisions Code`,
@@ -27,16 +28,18 @@ census_data <- readxl::read_excel(
     `Ward Code`, Ward, age_group, Observation
   )
 
-services <- readxl::read_excel("../data/service-data.xlsx", 
+services <- readxl::read_excel("../data/service-data.xlsx",
                                sheet = "processed")
+
+output_data <- list()
 
 for (age_i in age_groups) {
   # Load A&E data from ICB warehouse
   ane_data <- readxl::read_excel(
     paste0(
-      "../data/falls-ane-data-", 
+      "../data/falls-ane-data-",
       str_replace(year, "/", "-"),
-      ".xlsx" 
+      ".xlsx"
     ),
     sheet = age_i
   ) %>%
@@ -44,18 +47,19 @@ for (age_i in age_groups) {
       read.csv(
         "../data/West Midlands postcodes.csv",
         check.names=FALSE
-      ) %>% 
+      ) %>%
       # mutate() %>%
-      group_by(`LSOA Code`) %>% 
+      group_by(`LSOA Code`) %>%
       summarize (
         `Ward Code` = names(which.max(table(`Ward Code`)))
-      ) 
+      )
     ) %>%
     group_by(`Ward Code`) %>%
     summarise(
       number_of_falls = sum(number_of_falls)
     )
-  
+
+
   # Filter census data
   ward_counts <- census_data %>%
     filter(
@@ -64,18 +68,27 @@ for (age_i in age_groups) {
     select(
       `Ward Code`, Ward, Observation
     )
-  
+
   ward_falls <- ward_counts %>%
     left_join(ane_data,
               by = join_by("Ward Code")) %>%
-    replace(is.na(.), -1) %>%
+    replace(is.na(.), 0) %>%
     mutate(
       `Falls per 1000 residents` = `number_of_falls`/Observation*1000,
-      `Number of falls` = number_of_falls
-    )
-  
+      `Number of falls` = number_of_falls,
+      `Residents in age range` = Observation
+    ) %>%
+    select(
+      c(`Ward Code`, Ward, `Residents in age range`,
+        `Number of falls`, `Falls per 1000 residents`)
+      )
+
+
+  # Store age group rate to save later
+  output_data[[age_i]] <- ward_falls
+
   ## Weighted falls ##
-  
+
   title1 <- paste0(
     "Emergency hospital admissions for falls injuries in persons ",
     age_i,
@@ -94,28 +107,28 @@ for (age_i in age_groups) {
     style = "cont",
     palette = palette
   )
-  
+
   map1 <- add_points(
-    map, services, 
+    map, services,
     color = "Service Type",
     size = 0.2
   )
-  
+
 
   save_name1 <- paste(
-    "../output/", 
+    "../output/",
     str_replace(year, "/", "-"), "/",
     str_replace_all(age_i, " ", "-"),
-    "/Brum-falls-23-24-age-", 
+    "/Brum-falls-23-24-age-",
     str_replace_all(age_i, " ", "-"),
     sep = ""
   )
   save_map(map1, save_name = paste(save_name1, ".png", sep = ""),
            width = 4.5, height = 6)
 
-  
+
   ## html version ##
-  
+
   # Plot raw falls map
   map2 <- plot_map(
     ward_falls,
@@ -129,13 +142,19 @@ for (age_i in age_groups) {
     palette = palette
   )
   map2 <- add_points(
-    map2, services, 
+    map2, services,
     color = "Service Type",
     shape = "Provision",
     size = 0.2
   )
-  
+
   save_map(map2, save_name = paste(save_name1, ".html", sep = ""),
            width = 4.5, height = 6)
-  
+
 }
+
+write_xlsx(output_data,
+           paste0("../output/brum-ward-falls-",
+                  str_replace(year, "/", "-"),
+                  ".xlsx")
+           )
