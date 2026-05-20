@@ -73,8 +73,8 @@ injuries_from_falls AS (
 		I.NHSNumber,
 		CASE
 			WHEN I.AgeOnAdmission < 65 THEN 'Under 65'
-			WHEN I.AgeOnAdmission >= 65 AND I.AgeOnAdmission <= 79 THEN '65-79'
-			WHEN I.AgeOnAdmission >= 80 THEN '80+'
+			WHEN I.AgeOnAdmission >= 65 AND I.AgeOnAdmission <= 84 THEN '65-84'
+			WHEN I.AgeOnAdmission >= 85 THEN '85+'
 			ELSE 'Unexpected age'
 		END AS AgeGroup,
 		I.FinancialYear,
@@ -89,7 +89,6 @@ injuries_from_falls AS (
 		I.AdmissionDate = F.AdmissionDate
 )
 
-/*
 
 -- Extract falls counts by year, age group and LSOA21
 SELECT 
@@ -109,9 +108,8 @@ ORDER BY
 	AgeGroup 
 	ASC
 
-*/
 
-
+/*
 -- Extract falls counts by year, age group and ward
 SELECT 
 	FinancialYear, 
@@ -129,3 +127,5 @@ ORDER BY
 	FinancialYear, 
 	AgeGroup 
 	ASC
+
+*/
