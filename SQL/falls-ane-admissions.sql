@@ -18,7 +18,6 @@ SELECT DISTINCT
 	AdmissionDate,
 	AgeOnAdmission,
 	LowerlayerSuperOutputArea2021 AS LSOA21,
-	ElectoralWardDivision AS WardCode,
 	-- Calculate Financial Year
     CASE 
         WHEN MONTH(AdmissionDate) >= 4 
@@ -78,8 +77,7 @@ injuries_from_falls AS (
 			ELSE 'Unexpected age'
 		END AS AgeGroup,
 		I.FinancialYear,
-		I.LSOA21,
-		I.WardCode
+		I.LSOA21
 	FROM 
 		injuries AS I
 	INNER JOIN 
@@ -107,25 +105,3 @@ ORDER BY
 	FinancialYear, 
 	AgeGroup 
 	ASC
-
-
-/*
--- Extract falls counts by year, age group and ward
-SELECT 
-	FinancialYear, 
-	LEFT(FinancialYear, 4) AS FinancialYearSortable,
-	WardCode, 
-	AgeGroup, 
-	COUNT(*) AS N
-FROM injuries_from_falls
-WHERE LSOA21 IS NOT NULL
-GROUP BY 
-	FinancialYear, 
-	WardCode, 
-	AgeGroup
-ORDER BY 
-	FinancialYear, 
-	AgeGroup 
-	ASC
-
-*/
