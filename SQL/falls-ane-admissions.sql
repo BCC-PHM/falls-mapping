@@ -1,5 +1,5 @@
 /*
- ---- Falls A&E Admissions 22/23 ----
+ ---- Falls A&E Admissions 23/24 ----
 
 Defined by ONS as:
 ICD10 codes "S00 to T98" in the primary diagnosis and
@@ -8,186 +8,124 @@ ICD10 codes "S00 to T98" in the primary diagnosis and
 https://fingertips.phe.org.uk/search/falls#page/6/gid/1/pat/159/par/K02000001/ati/15/are/E92000001/iid/22401/age/27/sex/4/cat/-1/ctp/-1/yrr/1/cid/4/tbm/1
 */
 
+-- In 20/21 to 25/26
+DECLARE @MinDate DATETIME = '2020-04-01';
+DECLARE @MaxDate DATETIME = '2026-04-01';
+
 WITH injuries AS (
 SELECT DISTINCT
-	[NHSNumber],
-	[AdmissionDate],
-	[AgeOnAdmission]
-  FROM 
-	[EAT_Reporting_BSOL].[SUS].[VwInpatientEpisodesDiagnosisRelational] AS A
-  LEFT JOIN 
-	[EAT_Reporting_BSOL].[SUS].[VwInpatientEpisodes] AS B
-  ON 
-	A.[EpisodeId] = B.[EpisodeId]
+	NHSNumber,
+	AdmissionDate,
+	AgeOnAdmission,
+	LowerlayerSuperOutputArea2021 AS LSOA21,
+	ElectoralWardDivision AS WardCode,
+	-- Calculate Financial Year
+    CASE 
+        WHEN MONTH(AdmissionDate) >= 4 
+            THEN CONCAT(YEAR(AdmissionDate), '/', RIGHT(YEAR(AdmissionDate) + 1, 2))
+        ELSE 
+            CONCAT(YEAR(AdmissionDate) - 1, '/', RIGHT(YEAR(AdmissionDate), 2))
+    END AS FinancialYear
+
+	FROM 
+		EAT_Reporting_BSOL.SUS.VwInpatientEpisodesDiagnosisRelational AS A
+	LEFT JOIN 
+		EAT_Reporting_BSOL.SUS.VwInpatientEpisodes AS B
+		ON A.EpisodeId = B.EpisodeId
+	LEFT JOIN
+		EAT_Reporting_BSOL.SUS.VwInpatientEpisodesPatientGeography AS D
+		ON A.EpisodeId = D.EpisodeId
+
   WHERE 
     -- Physical injury codes S00 to T98
-    ([DiagnosisCode] LIKE '[S][0-9][0-9]%' OR
-	[DiagnosisCode] LIKE '[T][0-9][0-8]%') AND
+    (DiagnosisCode LIKE '[S][0-9][0-9]%' OR
+	DiagnosisCode LIKE '[T][0-9][0-8]%') AND
 	-- First reason for admission
-	[DiagnosisOrder] = 1 AND
-    -- In year 22/23
-	[AdmissionDate] >= '2022-04-01' AND [AdmissionDate] < '2023-04-01' 
+	DiagnosisOrder = 1 AND
+    -- In defined date range
+	AdmissionDate >= @MinDate AND AdmissionDate < @MaxDate
 ),
 
 falls AS (
 SELECT DISTINCT
-	[NHSNumber],
-	[AdmissionDate]
+	NHSNumber,
+	AdmissionDate
   FROM 
-	[EAT_Reporting_BSOL].[SUS].[VwInpatientEpisodesDiagnosisRelational] AS A
+	EAT_Reporting_BSOL.SUS.VwInpatientEpisodesDiagnosisRelational AS A
   LEFT JOIN 
-	[EAT_Reporting_BSOL].[SUS].[VwInpatientEpisodes] AS B
+	EAT_Reporting_BSOL.SUS.VwInpatientEpisodes AS B
   ON 
-	A.[EpisodeId] = B.[EpisodeId]
+	A.EpisodeId = B.EpisodeId
   WHERE 
     -- Fall codes W00 to W19
-    [DiagnosisCode] LIKE '[W][0-1][0-9]%' AND
+    DiagnosisCode LIKE '[W][0-1][0-9]%' AND
 	-- First reason for admission
-	[DiagnosisOrder] > 1 AND
-    -- In year 22/23
-	[AdmissionDate] >= '2022-04-01' AND [AdmissionDate] < '2023-04-01'
+	DiagnosisOrder > 1 AND
+    -- In defined date range
+	AdmissionDate >= @MinDate AND AdmissionDate < @MaxDate
 ),
 
-injuries_from_falls_65to84 AS (
+injuries_from_falls AS (
 	-- get all admissions with "S00 to T98" in the primary diagnosis and
     -- "W00-W19" in any of the other diagnosis fields
 	SELECT 
-		I.[NHSNumber]
+		DISTINCT -- Only count one per day
+		I.NHSNumber,
+		CASE
+			WHEN I.AgeOnAdmission < 65 THEN 'Under 65'
+			WHEN I.AgeOnAdmission >= 65 AND I.AgeOnAdmission <= 79 THEN '65-79'
+			WHEN I.AgeOnAdmission >= 80 THEN '80+'
+			ELSE 'Unexpected age'
+		END AS AgeGroup,
+		I.FinancialYear,
+		I.LSOA21,
+		I.WardCode
 	FROM 
 		injuries AS I
 	INNER JOIN 
 		falls as F
 	ON
-		I.[NHSNumber] = F.[NHSNumber] AND
-		I.[AdmissionDate] = F.[AdmissionDate]
-	WHERE
-		-- Only include those aged 65 +
-		AgeOnAdmission >= 65 AND AgeOnAdmission <85
-),
-
-injuries_from_falls_85plus AS (
-	-- get all admissions with "S00 to T98" in the primary diagnosis and
-    -- "W00-W19" in any of the other diagnosis fields
-	SELECT 
-		I.[NHSNumber]
-	FROM 
-		injuries AS I
-	INNER JOIN 
-		falls as F
-	ON
-		I.[NHSNumber] = F.[NHSNumber] AND
-		I.[AdmissionDate] = F.[AdmissionDate]
-	WHERE
-		-- Only include those aged 65 +
-		AgeOnAdmission >= 85
-),
-
-injuries_from_falls_below65 AS (
-	-- get all admissions with "S00 to T98" in the primary diagnosis and
-    -- "W00-W19" in any of the other diagnosis fields
-	SELECT 
-		I.[NHSNumber]
-	FROM 
-		injuries AS I
-	INNER JOIN 
-		falls as F
-	ON
-		I.[NHSNumber] = F.[NHSNumber] AND
-		I.[AdmissionDate] = F.[AdmissionDate]
-	WHERE
-		-- Only include those aged 65 +
-		AgeOnAdmission < 65
-),
-
-injuries_from_falls_all_ages AS (
-	-- get all admissions with "S00 to T98" in the primary diagnosis and
-    -- "W00-W19" in any of the other diagnosis fields
-	SELECT 
-		I.[NHSNumber],
-		I.[AgeOnAdmission]
-	FROM 
-		injuries AS I
-	INNER JOIN 
-		falls as F
-	ON
-		I.[NHSNumber] = F.[NHSNumber] AND
-		I.[AdmissionDate] = F.[AdmissionDate]
-),
-
-
-latest_arrivals AS (
-	-- Calculate the most recent admission for each NHS Number
-	SELECT
-		[NHSNumber],
-		MAX(ArrivalDateTime) AS LatestArrival
-	FROM 
-		[EAT_Reporting_BSOL].[SUS].[VwAEPatientGeography]
-	WHERE 
-		[ArrivalDateTime] >= '2022-04-01' AND [ArrivalDateTime] < '2023-04-01'
-	GROUP BY [NHSNumber]
-),
-
-patient_LSOAs_all AS (
-	-- Get latest ward for each NHS number
-	SELECT
-		DISTINCT
-		L.[NHSNumber],
-		W.[LowerLayerSuperOutputArea]
-	FROM latest_arrivals AS L
-	LEFT JOIN
-		[EAT_Reporting_BSOL].[SUS].[VwAEPatientGeography] AS W
-	ON 
-		L.[NHSNumber] = W.[NHSNumber] AND 
-		L.[LatestArrival] = W.[ArrivalDateTime]
-	WHERE 
-		W.[ArrivalDateTime] >= '2022-04-01' AND W.[ArrivalDateTime] < '2023-04-01'
-),
-
-problem_IDs AS (
-	-- Get NHS numbers that still have multiple wards
-	SELECT
-		[NHSNumber],
-		COUNT(*) AS N
-	FROM patient_LSOAs_all
-	GROUP BY [NHSNumber]
-	HAVING COUNT(*) > 1
-),
-
-patient_LSOAs AS (
-	-- Remove problem NHS IDs
-	SELECT
-		WA.*
-	FROM patient_LSOAs_all as WA
-	LEFT JOIN problem_IDs AS P
-	ON WA.[NHSNumber] = P.[NHSNumber]
-	WHERE P.[NHSNumber] IS NULL
+		I.NHSNumber = F.NHSNumber AND
+		I.AdmissionDate = F.AdmissionDate
 )
 
---injuries_from_falls_below65
---injuries_from_falls_65to84
---injuries_from_falls_85plus
-
-
-SELECT 
-	GEO.[LowerLayerSuperOutputArea],
-	COUNT(*) AS number_of_falls
-FROM 
-	injuries_from_falls_below65 AS IFF
-LEFT JOIN patient_LSOAs AS GEO
-	ON IFF.[NHSNumber] = GEO.[NHSNumber]
-GROUP BY GEO.[LowerLayerSuperOutputArea]
-ORDER BY COUNT(*) DESC
-
-
-
 /*
--- Get age breakdown
+
+-- Extract falls counts by year, age group and LSOA21
 SELECT 
-	AgeOnAdmission, 
+	FinancialYear, 
+	LEFT(FinancialYear, 4) AS FinancialYearSortable,
+	LSOA21, 
+	AgeGroup, 
 	COUNT(*) AS N
-FROM injuries_from_falls_all_ages 
-GROUP BY
-	AgeOnAdmission
+FROM injuries_from_falls
+WHERE LSOA21 IS NOT NULL
+GROUP BY 
+	FinancialYear, 
+	LSOA21, 
+	AgeGroup
 ORDER BY 
-	AgeOnAdmission
+	FinancialYear, 
+	AgeGroup 
+	ASC
+
 */
+
+
+-- Extract falls counts by year, age group and ward
+SELECT 
+	FinancialYear, 
+	LEFT(FinancialYear, 4) AS FinancialYearSortable,
+	WardCode, 
+	AgeGroup, 
+	COUNT(*) AS N
+FROM injuries_from_falls
+WHERE LSOA21 IS NOT NULL
+GROUP BY 
+	FinancialYear, 
+	WardCode, 
+	AgeGroup
+ORDER BY 
+	FinancialYear, 
+	AgeGroup 
+	ASC
