@@ -1,8 +1,9 @@
 # Falls mapping
-library("dplyr")
-library("BSol.mapR")
-library("stringr")
-library("writexl")
+library(dplyr)
+library(BSol.mapR)
+library(stringr)
+library(writexl)
+library(ggplot2)
 source("R/config.R")
 
 # Define labels for age groups of interest
@@ -75,22 +76,51 @@ ward_falls <- census_data %>%
     magnitude = 1000,
     Z = qnorm(0.975),
     p_hat = number_of_falls/Pop65Plus,
-    `Falls per 1000 residents` = p_hat*magnitude,
-    `Number of falls` = number_of_falls,
-    `Residents in age range` = Pop65Plus,
+    falls_per_1000_residents = p_hat*magnitude,
+    number_of_falls = number_of_falls,
     LowerCI95 = magnitude * (p_hat + Z^2/(2*Pop65Plus) - Z * sqrt((p_hat*(1-p_hat)/Pop65Plus) + Z^2/(4*Pop65Plus^2))) / (1 + Z^2/Pop65Plus),
     UpperCI95 = magnitude * (p_hat + Z^2/(2*Pop65Plus) + Z * sqrt((p_hat*(1-p_hat)/Pop65Plus) + Z^2/(4*Pop65Plus^2))) / (1 + Z^2/Pop65Plus)
   ) %>%
   select(
-    c(`Ward Code`, Ward, `Residents in age range`,
-      `Number of falls`, `Falls per 1000 residents`, 
+    c(`Ward Code`, Ward, Pop65Plus,
+      number_of_falls, falls_per_1000_residents, 
       LowerCI95, UpperCI95)
-    )
+    ) %>%
+  arrange(falls_per_1000_residents)
+
+brum_average <- ward_falls %>%
+  ungroup() %>%
+  summarise(
+    number_of_falls = sum(number_of_falls),
+    Pop65Plus = sum(Pop65Plus)
+  ) %>% 
+  mutate(
+    magnitude = 1000,
+    Z = qnorm(0.975),
+    p_hat = number_of_falls/Pop65Plus,
+    falls_per_1000_residents = p_hat*magnitude,
+    number_of_falls = number_of_falls,
+    LowerCI95 = magnitude * (p_hat + Z^2/(2*Pop65Plus) - Z * sqrt((p_hat*(1-p_hat)/Pop65Plus) + Z^2/(4*Pop65Plus^2))) / (1 + Z^2/Pop65Plus),
+    UpperCI95 = magnitude * (p_hat + Z^2/(2*Pop65Plus) + Z * sqrt((p_hat*(1-p_hat)/Pop65Plus) + Z^2/(4*Pop65Plus^2))) / (1 + Z^2/Pop65Plus),
+    Ward = "Birmingham",
+    `Ward Code` = NA
+  )%>%
+  select(
+    c(`Ward Code`, Ward, Pop65Plus,
+      number_of_falls, falls_per_1000_residents, 
+      LowerCI95, UpperCI95)
+  )
+
+# Save data
+write_xlsx(
+  rbind(brum_average, ward_falls), 
+  "output/2025-26/falls/falls-inpatient-data-25-26.xlsx"
+  )
 
 ## Weighted falls ##
 
 title1 <- paste0(
-  "Emergency hospital admissions for falls injuries in persons aged 65 + ",
+  "Emergency hospital admissions for falls injuries in persons aged 65+ ",
   " per 1000 residents",
   " (", FilterYear,")"
   )
@@ -98,7 +128,7 @@ title1 <- paste0(
 # Plot Birmingham map
 map <- plot_map(
   ward_falls,
-  value_header = "Falls per 1000 residents",
+  value_header = "falls_per_1000_residents",
   map_type = "Ward",
   area_name = "Birmingham",
   map_title  = title1,
@@ -107,6 +137,64 @@ map <- plot_map(
   textNA = NA
 )
 
-save_map(map, save_name = "output/2025-26/brum-falls-25-26.png",
+save_map(map, save_name = "output/2025-26/falls/brum-falls-map-25-26.png",
+         width = 4.5, height = 6)
 
-write_xlsx(ward_falls, "output/2025-26/falls-inpatient-data-25-26.xlsx")
+
+# Bar plot
+ward_falls %>%
+  mutate(
+    Ward = factor(Ward, levels=Ward),
+    significance = case_when(
+      LowerCI95 > brum_average$UpperCI95 ~ "Above average",
+      UpperCI95 < brum_average$LowerCI95 ~ "Below average",
+      TRUE ~ "No significant difference"
+    ),
+    significance = factor(
+      significance, 
+      levels = c("Below average",
+                 "No significant difference",
+                 "Above average"))
+  ) %>%
+  ggplot(aes(y = Ward, x = falls_per_1000_residents, fill = significance)) +
+  geom_col() +
+  geom_errorbar(aes(xmin = LowerCI95, xmax = UpperCI95)) +
+  theme_bw() +
+  theme(
+    legend.position = "top"
+  ) +
+  scale_fill_manual(
+    breaks = c("Below average", "No significant difference", "Above average"),
+    values = c("#105ca5", "darkgray", "lightblue")
+  ) +
+  scale_x_continuous(
+    limits = c(0, 50),
+    expand = c(0, 0)
+  ) +
+  geom_rect(
+    inherit.aes = FALSE,
+    data = brum_average[1, ],
+    aes(xmin = LowerCI95,
+        xmax = UpperCI95),
+    ymin = -Inf,
+    ymax = Inf,
+    fill = "#7b439a",
+    alpha = 0.3,
+    lwd = 0.7,
+    #color = "black",
+    linetype = "dotted"
+  )+
+  geom_vline(
+    aes(color = "Birmingham average",
+        xintercept = brum_average$falls_per_1000_residents),
+    lwd = 1
+  ) +
+  labs(
+    fill = "",
+    x = stringr::str_wrap(title1, 60),
+    y = "",
+    color = ""
+  ) +
+  scale_color_manual(values = c("#7b439a"))
+ggsave("output/2025-26/falls/brum-falls-25-26.png",
+       width = 8, height = 10)
