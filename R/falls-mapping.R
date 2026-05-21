@@ -198,3 +198,72 @@ ward_falls %>%
   scale_color_manual(values = c("#7b439a"))
 ggsave("output/2025-26/falls/brum-falls-25-26.png",
        width = 8, height = 10)
+
+
+
+# Change over time
+
+inpatients_over_time <- readxl::read_excel(
+  file.path(
+    data_path,
+    "BSol-falls-2122to2526.xlsx"
+  ),
+  sheet = "LSOA21"
+) %>% 
+  filter(
+    AgeGroup %in% c("65-84", "85+")
+  ) %>%
+  inner_join(
+    read.csv(
+      "data/West Midlands postcodes.csv",
+      check.names=FALSE
+    ) %>%
+      # mutate() %>%
+      group_by(`LSOA Code`) %>%
+      summarize (
+        LA = names(which.max(table(District)))
+      ) %>%
+      filter(LA == "Birmingham"),
+    by = join_by("LSOA21" == "LSOA Code")
+  ) %>%
+  group_by(FinancialYear, FinancialYearSortable) %>%
+  summarise(
+    number_of_falls = sum(N)
+  ) %>%
+  mutate(
+    Pop65Plus = sum(census_data$Pop65Plus),
+    magnitude = 1000,
+    Z = qnorm(0.975),
+    p_hat = number_of_falls/Pop65Plus,
+    falls_per_1000_residents = p_hat*magnitude,
+    number_of_falls = number_of_falls,
+    LowerCI95 = magnitude * (p_hat + Z^2/(2*Pop65Plus) - Z * sqrt((p_hat*(1-p_hat)/Pop65Plus) + Z^2/(4*Pop65Plus^2))) / (1 + Z^2/Pop65Plus),
+    UpperCI95 = magnitude * (p_hat + Z^2/(2*Pop65Plus) + Z * sqrt((p_hat*(1-p_hat)/Pop65Plus) + Z^2/(4*Pop65Plus^2))) / (1 + Z^2/Pop65Plus),
+  )
+
+title2 <- paste0(
+  "Emergency hospital admissions for falls injuries in persons aged 65+ ",
+  " per 1000 residents"
+)
+
+ggplot(inpatients_over_time, 
+       aes(x = FinancialYearSortable, y = falls_per_1000_residents)) +
+  geom_point() +
+  geom_line(linetype = "dashed") +
+  geom_errorbar(aes(ymin = LowerCI95, ymax = UpperCI95), width = 0.2) +
+  theme_bw() +
+  scale_x_continuous(
+    breaks = unique(inpatients_over_time$FinancialYearSortable),
+    labels = unique(inpatients_over_time$FinancialYear)
+  ) +
+  labs(
+    x = "", 
+    y = "", 
+    title = stringr::str_wrap(title2, 100)
+  ) +
+  theme(
+    plot.title = element_text(size = 10)
+  )
+
+ggsave("output/2025-26/falls/brum-falls-over-time.png",
+       width = 6, height = 3.5)
