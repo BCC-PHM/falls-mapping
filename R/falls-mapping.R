@@ -27,7 +27,7 @@ census_data <- readxl::read_excel(
     ) %>%
   filter(age_group %in% c("65-84", "85+")) %>%
   group_by(
-    `Ward Code`, Ward, age_group
+    `Ward Code`, Ward
     ) %>%
   summarise(
      Pop65Plus = sum(Observation),
@@ -72,13 +72,19 @@ ward_falls <- census_data %>%
             by = join_by("Ward Code")) %>%
   replace(is.na(.), 0) %>%
   mutate(
-    `Falls per 1000 residents` = number_of_falls/Pop65Plus*1000,
+    magnitude = 1000,
+    Z = qnorm(0.975),
+    p_hat = number_of_falls/Pop65Plus,
+    `Falls per 1000 residents` = p_hat*magnitude,
     `Number of falls` = number_of_falls,
-    `Residents in age range` = Pop65Plus
+    `Residents in age range` = Pop65Plus,
+    LowerCI95 = magnitude * (p_hat + Z^2/(2*Pop65Plus) - Z * sqrt((p_hat*(1-p_hat)/Pop65Plus) + Z^2/(4*Pop65Plus^2))) / (1 + Z^2/Pop65Plus),
+    UpperCI95 = magnitude * (p_hat + Z^2/(2*Pop65Plus) + Z * sqrt((p_hat*(1-p_hat)/Pop65Plus) + Z^2/(4*Pop65Plus^2))) / (1 + Z^2/Pop65Plus)
   ) %>%
   select(
     c(`Ward Code`, Ward, `Residents in age range`,
-      `Number of falls`, `Falls per 1000 residents`)
+      `Number of falls`, `Falls per 1000 residents`, 
+      LowerCI95, UpperCI95)
     )
 
 ## Weighted falls ##
@@ -102,6 +108,5 @@ map <- plot_map(
 )
 
 save_map(map, save_name = "output/2025-26/brum-falls-25-26.png",
-         width = 4.5, height = 6)
 
 write_xlsx(ward_falls, "output/2025-26/falls-inpatient-data-25-26.xlsx")
